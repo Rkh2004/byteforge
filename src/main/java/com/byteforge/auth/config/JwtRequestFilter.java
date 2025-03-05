@@ -1,4 +1,5 @@
 package com.byteforge.auth.config;
+import com.byteforge.auth.repository.BlacklistedTokenRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,6 +25,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
     @Autowired
     private JwtTokenUtil jwtTokenUtil;
 
+    @Autowired
+    private BlacklistedTokenRepository blacklistedTokenRepository;
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
@@ -33,8 +37,16 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         String username = null;
         String jwt = null;
 
+        // for all the api requests coming with authorization header
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             jwt = authorizationHeader.substring(7);
+
+            // checking if the token is blacklisted
+            if (blacklistedTokenRepository.findByToken(jwt).isPresent()) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("Token is blacklisted. Please log in again.");
+                return;
+            }
             try {
                 username = jwtTokenUtil.extractUsername(jwt);
             } catch (Exception e) {
@@ -42,6 +54,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             }
         }
 
+        // if the username is not null and the user is not already authenticated
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 

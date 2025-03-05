@@ -2,10 +2,13 @@ package com.byteforge.auth.service;
 import com.byteforge.auth.dto.AuthRequest;
 import com.byteforge.auth.dto.AuthResponse;
 import com.byteforge.auth.dto.RegisterRequest;
+import com.byteforge.auth.model.BlacklistedToken;
 import com.byteforge.auth.model.User;
+import com.byteforge.auth.repository.BlacklistedTokenRepository;
 import com.byteforge.auth.repository.UserRepository;
 import com.byteforge.auth.util.JwtTokenUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -13,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.byteforge.exception.ResourceAlreadyExistsException;
 
+import java.util.Date;
 import java.util.HashSet;
 
 @Service
@@ -32,6 +36,8 @@ public class AuthService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+    @Autowired
+    private BlacklistedTokenRepository blacklistedTokenRepository;
 
     public AuthResponse login(AuthRequest authRequest) {
         authenticationManager.authenticate(
@@ -85,4 +91,17 @@ public class AuthService {
 
         return new AuthResponse(token, user.getUsername(), user.getEmail());
     }
+
+    public Object logout(String token){
+        if(token != null && token.startsWith("Bearer ")){
+            token = token.substring(7);
+        }
+
+        if(token == null || jwtTokenUtil.extractExpiration(token).before(new Date())){
+            return ResponseEntity.badRequest().body("Invalid token");
+        }
+        blacklistedTokenRepository.save(new BlacklistedToken(token, jwtTokenUtil.extractExpiration(token)));
+        return "Logged out successfully";
+    }
+
 }
