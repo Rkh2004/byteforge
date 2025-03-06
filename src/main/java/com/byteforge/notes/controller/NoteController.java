@@ -23,8 +23,9 @@ public class NoteController {
     private NoteService noteService;
 
     @Autowired
-    private UserRepository userRepository;  // Inject UserRepository
+    private UserRepository userRepository;
 
+    //helper method to authenticate user
     private User getAuthenticatedUser(Principal principal) {
         String username = principal.getName();
         return userRepository.findByUsername(username)
@@ -35,7 +36,9 @@ public class NoteController {
     public ResponseEntity<List<NoteDTO>> getAllNotes(Principal principal) {
         User user = getAuthenticatedUser(principal);
         List<Note> notes = noteService.getAllNotesForUser(user);
-        List<NoteDTO> noteDTOs = notes.stream().map(NoteMapper::toDTO).collect(Collectors.toList());
+        List<NoteDTO> noteDTOs = notes.stream()
+                .map(NoteMapper::toDTO)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(noteDTOs);
     }
 

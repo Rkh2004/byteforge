@@ -23,11 +23,8 @@ public class NoteService {
     }
 
     public Note createNote(Note note, User user) {
-        // Ensure the user entity is managed before setting it to the note
-        User persistedUser = userRepository.findById(user.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        note.setUser(persistedUser);
+        note.setUser(user);
         return noteRepository.save(note);
     }
 
