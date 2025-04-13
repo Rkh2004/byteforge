@@ -53,6 +53,7 @@ public class AuthService {
         // Find the user to get their actual username and email
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found after authentication"));
+        System.out.println("User logged in");
 
         return new AuthResponse(token, user.getUsername(), user.getEmail());
     }
