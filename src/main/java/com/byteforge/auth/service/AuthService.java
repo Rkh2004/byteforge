@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -49,12 +51,14 @@ public class AuthService {
     private RoleRepository roleRepository;
 
     public AuthResponse login(AuthRequest authRequest) {
-        authenticationManager.authenticate(
+        Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         authRequest.getUsernameOrEmail(),
                         authRequest.getPassword()
                 )
         );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         User user = userRepository.findByUsername(authRequest.getUsernameOrEmail())
                 .orElseGet(() -> userRepository.findByEmail(authRequest.getUsernameOrEmail())
                         .orElseThrow(() -> new UsernameNotFoundException("User not found")));
@@ -66,7 +70,7 @@ public class AuthService {
                 .map(Role::getName)
                 .collect(Collectors.toList());
 
-        String token = jwtTokenUtil.generateToken(userDetails, roleNames);
+        String token = jwtTokenUtil.generateToken(userDetails, roleNames, user.getId());
 
         return new AuthResponse(token, user.getUsername(), user.getEmail());
     }
@@ -101,11 +105,15 @@ public class AuthService {
         // Generate token
         final UserDetails userDetails = userDetailsServiceImpl.loadUserByUsername(registerRequest.getUsername());
 
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                userDetails, null, userDetails.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
         List<String> roleNames = user.getRoles()
                 .stream()
                 .map(Role::getName)
                 .toList();
-        final String token = jwtTokenUtil.generateToken(userDetails, roleNames);
+        final String token = jwtTokenUtil.generateToken(userDetails, roleNames, user.getId());
 
         return new AuthResponse(token, user.getUsername(), user.getEmail());
     }

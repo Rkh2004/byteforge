@@ -29,8 +29,9 @@ public class JwtTokenUtil {
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateToken(UserDetails userDetails, List<String> roles) {
+    public String generateToken(UserDetails userDetails, List<String> roles,Long userId) {
         Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
         claims.put("roles", roles);
         return createToken(claims, userDetails.getUsername());
     }
@@ -55,6 +56,10 @@ public class JwtTokenUtil {
     }
 
 
+    public Long extractUserId(String token){
+        Claims claims = extractAllClaims(token);
+        return (Long)claims.get("userId");
+    }
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
     }
