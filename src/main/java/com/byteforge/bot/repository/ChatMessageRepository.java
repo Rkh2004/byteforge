@@ -10,4 +10,5 @@ import java.util.List;
 @Repository
 public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> {
     List<ChatMessage> findByUserIdAndTopicIdOrderByTimestampDesc(Long userId, String topicId, Pageable pageable);
+    List<ChatMessage> findByUserIdAndTopicIdOrderByTimestampAsc(Long userId, String topicId);
 }

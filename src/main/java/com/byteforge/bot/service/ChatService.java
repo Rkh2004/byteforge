@@ -8,17 +8,23 @@ import com.byteforge.bot.model.SenderType;
 import com.byteforge.bot.repository.ChatMessageRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -33,6 +39,8 @@ public class ChatService {
         this.chatMessageRepository = chatMessageRepository;
         this.chatClientBuilder = chatClientBuilder;
     }
+    @Value("${byteforge.chat.history.limit:10}")
+    private int historyLimit;
 
     private static final String SYSTEM_PROMPT_TEMPLATE = """
             You are ByteForge AI, a friendly and helpful programming tutor for the ByteForge Java learning environment.
@@ -57,11 +65,14 @@ public class ChatService {
             """;
 
 
+    @Transactional
     public ChatResponse processMessage(Long userId, String topic, ChatRequest chatRequest){
 
         saveChatMessage(userId, topic, chatRequest.getQuery(), SenderType.USER);
 
-        Prompt prompt = buildPrompt(topic, chatRequest.getStaticContent(), chatRequest.getQuery());
+        List<Message> historyMessages = getHistoryMessages(userId, topic);
+
+        Prompt prompt = buildPrompt(topic, chatRequest.getStaticContent(), historyMessages,chatRequest.getQuery());
 
         ChatClient chatClient = chatClientBuilder.build();
 
@@ -71,10 +82,8 @@ public class ChatService {
 
         log.info("Received AI response for user: {}, topic: {}", userId, topic);
 
-        // 5. Save AI Response
         saveChatMessage(userId, topic, aiContent, SenderType.AI);
 
-        // 6. Return Response DTO
         return new ChatResponse(aiContent, Instant.now());
 
     }
@@ -90,7 +99,25 @@ public class ChatService {
         log.debug("Saved {} message for user: {}, topic: {}", senderType, userId, topic);
     }
 
-    private Prompt buildPrompt(String topic, String staticContent, String query){
+    private List<Message> getHistoryMessages(Long userId, String topic) {
+        Pageable pageable = PageRequest.of(0, historyLimit); // Fetch latest N messages
+        List<ChatMessage> history = chatMessageRepository.findByUserIdAndTopicIdOrderByTimestampDesc(userId, topic, pageable);
+
+        // Convert stored messages to Spring AI Message format, reversing order to chronological
+        return history.stream()
+                .map(msg -> (Message)(msg.getSenderType() == SenderType.USER
+                        ? new UserMessage(msg.getMessageContent())
+                        : new AssistantMessage(msg.getMessageContent())))
+                .collect(Collectors.collectingAndThen(
+                        Collectors.toList(),
+                        list -> {
+                            java.util.Collections.reverse(list); // Ensure chronological order for the prompt
+                            return list;
+                        }
+                ));
+    }
+
+    private Prompt buildPrompt(String topic, String staticContent,List<Message> historyMessages, String query){
         SystemPromptTemplate systemPromptTemplate = new SystemPromptTemplate(SYSTEM_PROMPT_TEMPLATE);
         Message systemMessage = systemPromptTemplate.createMessage(Map.of(
                 "topic", topic,
@@ -99,6 +126,7 @@ public class ChatService {
         List<Message> allMessages = new ArrayList<>();
 
         allMessages.add(systemMessage);
+        allMessages.addAll(historyMessages);
         allMessages.add(new UserMessage(query));
 
         return new Prompt(allMessages);
