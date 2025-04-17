@@ -41,7 +41,7 @@ public class ChatController {
 
         User user = getAuthenticatedUser(userDetails);
 
-        ChatResponse chatResponse = chatService.processMessage(user.getId(), topic, chatRequest);
+        ChatResponse chatResponse = chatService.processMessage(user, topic, chatRequest);
 
         return ResponseEntity.ok(chatResponse);
     }

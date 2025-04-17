@@ -66,11 +66,11 @@ public class ChatService {
 
 
     @Transactional
-    public ChatResponse processMessage(Long userId, String topic, ChatRequest chatRequest){
+    public ChatResponse processMessage(User user, String topic, ChatRequest chatRequest){
 
-        saveChatMessage(userId, topic, chatRequest.getQuery(), SenderType.USER);
+        saveChatMessage(user, topic, chatRequest.getQuery(), SenderType.USER);
 
-        List<Message> historyMessages = getHistoryMessages(userId, topic);
+        List<Message> historyMessages = getHistoryMessages(user, topic);
 
         Prompt prompt = buildPrompt(topic, chatRequest.getStaticContent(), historyMessages,chatRequest.getQuery());
 
@@ -80,28 +80,28 @@ public class ChatService {
 
         String aiContent = aiResponse.getResult().getOutput().getText();
 
-        log.info("Received AI response for user: {}, topic: {}", userId, topic);
+        log.info("Received AI response for user: {}, topic: {}", user, topic);
 
-        saveChatMessage(userId, topic, aiContent, SenderType.AI);
+        saveChatMessage(user, topic, aiContent, SenderType.AI);
 
         return new ChatResponse(aiContent, Instant.now());
 
     }
 
-    private void saveChatMessage(Long userId, String topic, String content, SenderType senderType){
+    private void saveChatMessage(User user, String topic, String content, SenderType senderType){
         ChatMessage chatMessage = new ChatMessage();
-        chatMessage.setUserId(userId);
+        chatMessage.setUser(user);
         chatMessage.setTopicId(topic);
         chatMessage.setMessageContent(content);
         chatMessage.setSenderType(senderType);
 
         chatMessageRepository.save(chatMessage);
-        log.debug("Saved {} message for user: {}, topic: {}", senderType, userId, topic);
+        log.debug("Saved {} message for user: {}, topic: {}", senderType, user, topic);
     }
 
-    private List<Message> getHistoryMessages(Long userId, String topic) {
+    private List<Message> getHistoryMessages(User user, String topic) {
         Pageable pageable = PageRequest.of(0, historyLimit); // Fetch latest N messages
-        List<ChatMessage> history = chatMessageRepository.findByUserIdAndTopicIdOrderByTimestampDesc(userId, topic, pageable);
+        List<ChatMessage> history = chatMessageRepository.findByUserIdAndTopicIdOrderByTimestampDesc(user.getId(), topic, pageable);
 
         // Convert stored messages to Spring AI Message format, reversing order to chronological
         return history.stream()

@@ -1,5 +1,6 @@
 package com.byteforge.notes.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import com.byteforge.auth.model.User;
 import lombok.*;
@@ -28,6 +29,7 @@ public class Note {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
     private User user;
 
     @PrePersist

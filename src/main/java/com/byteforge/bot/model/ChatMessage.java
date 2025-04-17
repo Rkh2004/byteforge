@@ -1,5 +1,7 @@
 package com.byteforge.bot.model;
 
+import com.byteforge.auth.model.User;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -18,8 +20,11 @@ public class ChatMessage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, updatable = false)
-    private Long userId; // Link to your user identifier (e.g., username or UUID from SecurityContext)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    @JsonIgnore
+    private User user;
+
 
     @Column(nullable = false, updatable = false)
     private String topicId; // e.g., "inheritance", "polymorphism", "variables-datatypes"
