@@ -3,21 +3,29 @@ import com.byteforge.auth.dto.AuthRequest;
 import com.byteforge.auth.dto.AuthResponse;
 import com.byteforge.auth.dto.RegisterRequest;
 import com.byteforge.auth.model.BlacklistedToken;
+import com.byteforge.auth.model.Role;
 import com.byteforge.auth.model.User;
 import com.byteforge.auth.repository.BlacklistedTokenRepository;
+import com.byteforge.auth.repository.RoleRepository;
 import com.byteforge.auth.repository.UserRepository;
 import com.byteforge.auth.util.JwtTokenUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.byteforge.exception.ResourceAlreadyExistsException;
 
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthService {
@@ -29,7 +37,7 @@ public class AuthService {
     private JwtTokenUtil jwtTokenUtil;
 
     @Autowired
-    private UserDetailsServiceImpl userDetailsService;
+    private UserDetailsServiceImpl userDetailsServiceImpl;
 
     @Autowired
     private UserRepository userRepository;
@@ -39,21 +47,30 @@ public class AuthService {
     @Autowired
     private BlacklistedTokenRepository blacklistedTokenRepository;
 
+    @Autowired
+    private RoleRepository roleRepository;
+
     public AuthResponse login(AuthRequest authRequest) {
-        authenticationManager.authenticate(
+        Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         authRequest.getUsernameOrEmail(),
                         authRequest.getPassword()
                 )
         );
+        SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        final UserDetails userDetails = userDetailsService.loadUserByUsername(authRequest.getUsernameOrEmail());
-        final String token = jwtTokenUtil.generateToken(userDetails);
+        User user = userRepository.findByUsername(authRequest.getUsernameOrEmail())
+                .orElseGet(() -> userRepository.findByEmail(authRequest.getUsernameOrEmail())
+                        .orElseThrow(() -> new UsernameNotFoundException("User not found")));
 
-        // Find the user to get their actual username and email
-        User user = userRepository.findByUsername(userDetails.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found after authentication"));
-        System.out.println("User logged in");
+
+        final UserDetails userDetails = userDetailsServiceImpl.loadUserByUsername(authRequest.getUsernameOrEmail());
+        List<String> roleNames = user.getRoles()
+                .stream()
+                .map(Role::getName)
+                .collect(Collectors.toList());
+
+        String token = jwtTokenUtil.generateToken(userDetails, roleNames, user.getId());
 
         return new AuthResponse(token, user.getUsername(), user.getEmail());
     }
@@ -76,19 +93,27 @@ public class AuthService {
         user.setEmail(registerRequest.getEmail());
 
         // Set default role if none provided
-        if (registerRequest.getRoles() == null || registerRequest.getRoles().isEmpty()) {
-            HashSet<String> roles = new HashSet<>();
-            roles.add("USER");
-            user.setRoles(roles);
-        } else {
-            user.setRoles(registerRequest.getRoles());
-        }
+        Role defaultRole = roleRepository.findByName("ROLE_USER")
+                .orElseThrow(() -> new RuntimeException("Default role not found"));
+
+        Set<Role> userRoles = new HashSet<>();
+        userRoles.add(defaultRole);
+        user.setRoles(userRoles);
 
         userRepository.save(user);
 
         // Generate token
-        final UserDetails userDetails = userDetailsService.loadUserByUsername(registerRequest.getUsername());
-        final String token = jwtTokenUtil.generateToken(userDetails);
+        final UserDetails userDetails = userDetailsServiceImpl.loadUserByUsername(registerRequest.getUsername());
+
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                userDetails, null, userDetails.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        List<String> roleNames = user.getRoles()
+                .stream()
+                .map(Role::getName)
+                .toList();
+        final String token = jwtTokenUtil.generateToken(userDetails, roleNames, user.getId());
 
         return new AuthResponse(token, user.getUsername(), user.getEmail());
     }
