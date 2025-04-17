@@ -8,7 +8,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @EnableJpaRepositories(basePackages = {
 		"com.byteforge.auth.repository",
 		"com.byteforge.notes.repository",
-		"com.byteforge.bot.repository"
+		"com.byteforge.bot.repository",
+		"com.byteforge.quiz.repository"
 })
 public class ByteforgeApplication {
 
